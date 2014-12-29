@@ -5,7 +5,7 @@
  * Plugin Name: WooCommerce Print Invoice & Delivery Note
  * Plugin URI: https://github.com/piffpaffpuff/woocommerce-delivery-notes
  * Description: Print Invoices & Delivery Notes for WooCommerce Orders. 
- * Version: 3.1.1
+ * Version: 4.0.2
  * Author: Triggvy Gunderson
  * Author URI: https://github.com/piffpaffpuff/woocommerce-delivery-notes
  * License: GPLv3 or later
@@ -34,12 +34,20 @@
  */
 
 /**
+ * Exit if accessed directly
+ */
+if ( !defined( 'ABSPATH' ) ) {
+	exit; 
+}
+
+/**
  * Base class
  */
 if ( !class_exists( 'WooCommerce_Delivery_Notes' ) ) {
 
 	final class WooCommerce_Delivery_Notes {
 	
+		public static $plugin_version;
 		public static $plugin_prefix;
 		public static $plugin_url;
 		public static $plugin_path;
@@ -56,6 +64,7 @@ if ( !class_exists( 'WooCommerce_Delivery_Notes' ) ) {
 		 */
 		public function __construct() {
 			// Define the constants
+			self::$plugin_version = '4.0.2';
 			self::$plugin_prefix = 'wcdn_';
 			self::$plugin_basefile_path = __FILE__;
 			self::$plugin_basefile = plugin_basename( self::$plugin_basefile_path );
@@ -63,7 +72,6 @@ if ( !class_exists( 'WooCommerce_Delivery_Notes' ) ) {
 			self::$plugin_path = trailingslashit( dirname( self::$plugin_basefile_path ) );	
 			
 			// Set hooks and wait for WooCommerce to load
-			register_activation_hook( self::$plugin_basefile_path, array( $this, 'install' ) );
 			add_action( 'plugins_loaded', array( $this, 'localise' ) );
 			add_action( 'woocommerce_init', array( $this, 'load' ) );
 		}
@@ -88,23 +96,16 @@ if ( !class_exists( 'WooCommerce_Delivery_Notes' ) ) {
 		}
 		
 		/**
-		 * Install the defaults on activation
-		 */
-		public function install() {
-			// Define default settings
-			$option = get_option( self::$plugin_prefix . 'print_order_page_endpoint' );
-			if( !$option ) {
-				update_option( self::$plugin_prefix . 'print_order_page_endpoint', 'print-order' );
-
-				// Flush the rewrite rules when a fresh install
-				set_transient( self::$plugin_prefix . 'flush_rewrite_rules', true );
-			}
-		}
-		
-		/**
 		 * Load the localisation 
 		 */
 		public function localise() {	
+			// Load language files from the wp-content/languages/plugins folder
+			$mo_file = WP_LANG_DIR . '/plugins/woocommerce-delivery-notes-' . get_locale() . '.mo';
+			if( is_readable( $mo_file ) ) {
+				load_textdomain( 'woocommerce-delivery-notes', $mo_file );
+			}
+
+			// Otherwise load them from the plugin folder
 			load_plugin_textdomain( 'woocommerce-delivery-notes', false, dirname( self::$plugin_basefile ) . '/languages/' );
 		}
 		
@@ -134,14 +135,49 @@ if ( !class_exists( 'WooCommerce_Delivery_Notes' ) ) {
 		 * Load the admin hooks
 		 */
 		public function load_admin_hooks() {
+			$this->update();
+			
 			add_filter( 'plugin_action_links_' . self::$plugin_basefile, array( $this, 'add_settings_link') );
+		}
+		
+				
+		/**
+		 * Install ord update the default settings
+		 */
+		public function update() {
+			// Define default settings
+			if( get_option( self::$plugin_prefix . 'version' ) != self::$plugin_version ) {
+				// Print slug for the frontend
+				$endpoint = get_option( self::$plugin_prefix . 'print_order_page_endpoint' );
+				if( !$endpoint ) {
+					update_option( self::$plugin_prefix . 'print_order_page_endpoint', 'print-order' );
+	
+					// Flush the rewrite rules when a fresh install
+					set_transient( self::$plugin_prefix . 'flush_rewrite_rules', true );
+				}
+				
+				// Template types
+				$invoice = get_option( self::$plugin_prefix . 'template_type_invoice' );
+				if( !$invoice ) {
+					update_option( self::$plugin_prefix . 'template_type_invoice', 1 );
+				}
+				
+				$delivery_note = get_option( self::$plugin_prefix . 'template_type_delivery_note' );
+				if( !$delivery_note ) {
+					update_option( self::$plugin_prefix . 'template_type_delivery_note', 1 );
+				}
+				
+				// Update the settings to the latest version
+				update_option( self::$plugin_prefix . 'version', self::$plugin_version );
+			}
 		}
 		
 		/**
 		 * Add settings link to plugin page
 		 */
 		public function add_settings_link( $links ) {
-			$settings = sprintf( '<a href="%s" title="%s">%s</a>' , admin_url( 'admin.php?page=woocommerce&tab=' . $this->settings->tab_name ) , __( 'Go to the settings page', 'woocommerce-delivery-notes' ) , __( 'Settings', 'woocommerce-delivery-notes' ) );
+			$url = esc_url( admin_url( add_query_arg( array( 'page' => 'wc-settings', 'tab' => $this->settings->tab_name ), 'admin.php' ) ) );
+			$settings = sprintf( '<a href="%s" title="%s">%s</a>' , $url, __( 'Go to the settings page', 'woocommerce-delivery-notes' ) , __( 'Settings', 'woocommerce-delivery-notes' ) );
 			array_unshift( $links, $settings );
 			return $links;	
 		}

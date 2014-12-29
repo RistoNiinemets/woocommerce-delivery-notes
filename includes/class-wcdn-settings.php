@@ -1,6 +1,13 @@
 <?php
 
 /**
+ * Exit if accessed directly
+ */
+if ( !defined( 'ABSPATH' ) ) {
+	exit; 
+}
+
+/**
  * Settings class
  */
 if ( !class_exists( 'WooCommerce_Delivery_Notes_Settings' ) ) {
@@ -30,7 +37,8 @@ if ( !class_exists( 'WooCommerce_Delivery_Notes_Settings' ) ) {
 			add_action( 'woocommerce_settings_tabs_' . $this->tab_name, array( $this, 'create_settings_page' ) );
 			add_action( 'woocommerce_update_options_' . $this->tab_name, array( $this, 'save_settings_page' ) );
 			add_action( 'current_screen', array( $this, 'load_screen_hooks' ) );
-			add_action( 'wp_ajax_load_thumbnail', array( $this, 'load_thumbnail_ajax' ) );
+			add_action( 'wp_ajax_wcdn_load_thumbnail', array( $this, 'load_thumbnail_ajax' ) );
+			add_action( 'wp_ajax_wcdn_reset_counter', array( $this, 'reset_invoice_counter_ajax' ) );
 		}
 		
 		/**
@@ -59,6 +67,10 @@ if ( !class_exists( 'WooCommerce_Delivery_Notes_Settings' ) ) {
 			wp_enqueue_media();
 			wp_enqueue_script( 'woocommerce-delivery-notes-print-link', WooCommerce_Delivery_Notes::$plugin_url . 'js/jquery.print-link.js', array( 'jquery' ) );
 			wp_enqueue_script( 'woocommerce-delivery-notes-admin', WooCommerce_Delivery_Notes::$plugin_url . 'js/admin.js', array( 'jquery', 'custom-header', 'woocommerce-delivery-notes-print-link' ) );
+
+			// Localize the script strings
+			$translation = array( 'resetCounter' => __( 'Do you really want to reset the counter to zero?' ) );
+			wp_localize_script( 'woocommerce-delivery-notes-admin', 'WCDNText', $translation );
 		}
 		
 		/**
@@ -121,9 +133,26 @@ if ( !class_exists( 'WooCommerce_Delivery_Notes_Settings' ) ) {
 		}
 		
 		/**
+		 * Reset the invoice number counter with ajax
+		 */
+		public function reset_invoice_counter_ajax() {
+			if( !wp_verify_nonce( $_POST['nonce'], WooCommerce_Delivery_Notes::$plugin_prefix . 'settings_nonce' ) || !isset( $_POST['reset'] ) ) {
+				print_r('no reset');
+				exit;
+			}
+
+			// Reset the counter
+			update_option( WooCommerce_Delivery_Notes::$plugin_prefix . 'invoice_number_counter', 0 );
+			
+			exit;
+		}	
+			
+		/**
 		 * Create the settings page content
 		 */
 		public function create_settings_page() {
+			wp_nonce_field( WooCommerce_Delivery_Notes::$plugin_prefix . 'settings_nonce', 'settings-nonce' );
+			
 			?>
 			<h3><?php _e( 'Print Order', 'woocommerce-delivery-notes' ); ?></h3>
 			<p>
@@ -140,11 +169,11 @@ if ( !class_exists( 'WooCommerce_Delivery_Notes_Settings' ) ) {
 					$results = $query->get_posts();
 					$test_id = $results[0]->ID;
 					$invoice_url = wcdn_get_print_link( $test_id, 'invoice' );
-					$note_url = wcdn_get_print_link( $test_id, 'delivery-note' );
+					$delivery_note_url = wcdn_get_print_link( $test_id, 'delivery-note' );
+					$receipt_url = wcdn_get_print_link( $test_id, 'receipt' );
 					?>
-					<input type="hidden" id="<?php echo WooCommerce_Delivery_Notes::$plugin_prefix; ?>show_print_preview" />
 					<span class="description">
-						<?php printf( __( 'You can preview the <a href="%1$s" target="%3$s" class="%4$s">invoice template</a> or <a href="%2$s" target="%3$s" class="%4$s">delivery note template</a>.', 'woocommerce-delivery-notes' ), $invoice_url, $note_url, '_blank', '' ); ?>
+						<?php printf( __( 'You can preview the <a href="%1$s" target="%4$s" class="%5$s">invoice</a>, <a href="%2$s" target="%4$s" class="%5$s">delivery note</a> or <a href="%3$s" target="%4$s" class="%5$s">receipt</a> template.', 'woocommerce-delivery-notes' ), $invoice_url, $delivery_note_url, $receipt_url, '_blank', '' ); ?>
 						<?php _e( 'With the FAQ in the readme file you can learn how to customize the template.', 'woocommerce-delivery-notes' ); ?>
 					</span>
 				<?php endif; ?>
@@ -238,6 +267,34 @@ if ( !class_exists( 'WooCommerce_Delivery_Notes_Settings' ) ) {
 							</span>
 						</td>
 					</tr>
+					<tr>
+						<th>
+							<?php _e( 'Types', 'woocommerce-delivery-notes' ); ?>
+						</th>
+						<td>
+							<fieldset>
+								<label>
+									<input name="<?php echo WooCommerce_Delivery_Notes::$plugin_prefix; ?>template_type_invoice" type="hidden" value="" />
+									<input name="<?php echo WooCommerce_Delivery_Notes::$plugin_prefix; ?>template_type_invoice" type="checkbox" value="1" <?php checked( get_option( WooCommerce_Delivery_Notes::$plugin_prefix . 'template_type_invoice' ), 1 ); ?> />
+									<?php _e( 'Enable Invoices', 'woocommerce-delivery-notes' ); ?>
+								</label>
+							</fieldset>
+							<fieldset>
+								<label>
+									<input name="<?php echo WooCommerce_Delivery_Notes::$plugin_prefix; ?>template_type_delivery_note" type="hidden" value="" />
+									<input name="<?php echo WooCommerce_Delivery_Notes::$plugin_prefix; ?>template_type_delivery_note" type="checkbox" value="1" <?php checked( get_option( WooCommerce_Delivery_Notes::$plugin_prefix . 'template_type_delivery_note' ), 1 ); ?> />
+									<?php _e( 'Enable Delivery Notes', 'woocommerce-delivery-notes' ); ?>
+								</label>
+							</fieldset>
+							<fieldset>
+								<label>
+									<input name="<?php echo WooCommerce_Delivery_Notes::$plugin_prefix; ?>template_type_receipt" type="hidden" value="" />
+									<input name="<?php echo WooCommerce_Delivery_Notes::$plugin_prefix; ?>template_type_receipt" type="checkbox" value="1" <?php checked( get_option( WooCommerce_Delivery_Notes::$plugin_prefix . 'template_type_receipt' ), 1 ); ?> />
+									<?php _e( 'Enable Receipts', 'woocommerce-delivery-notes' ); ?>
+								</label>
+							</fieldset>
+						</td>
+					</tr>
 				</tbody>
 			</table>
 
@@ -250,7 +307,7 @@ if ( !class_exists( 'WooCommerce_Delivery_Notes_Settings' ) ) {
 						</th>
 						<td>
 							<p>
-								<input type="text" name="<?php echo WooCommerce_Delivery_Notes::$plugin_prefix; ?>print_order_page_endpoint" value="<?php echo get_option( WooCommerce_Delivery_Notes::$plugin_prefix . 'print_order_page_endpoint' ); ?>" />
+								<input type="text" name="<?php echo WooCommerce_Delivery_Notes::$plugin_prefix; ?>print_order_page_endpoint" value="<?php echo get_option( WooCommerce_Delivery_Notes::$plugin_prefix . 'print_order_page_endpoint', 'print-order' ); ?>" />
 							</p>
 							<span class="description">
 								<?php _e( 'The endpoint is appended to the accounts page URL to print the order. It should be unique.', 'woocommerce-delivery-notes' ); ?>
@@ -305,13 +362,12 @@ if ( !class_exists( 'WooCommerce_Delivery_Notes_Settings' ) ) {
 						</th>
 						<td>
 							<p>
-								<input type="text" name="<?php echo WooCommerce_Delivery_Notes::$plugin_prefix; ?>invoice_number_start" value="<?php echo stripslashes( wp_kses_stripslashes( get_option( WooCommerce_Delivery_Notes::$plugin_prefix . 'invoice_number_start', 1 ) ) ); ?>" />
+								<input type="number" name="<?php echo WooCommerce_Delivery_Notes::$plugin_prefix; ?>invoice_number_start" value="<?php echo stripslashes( wp_kses_stripslashes( get_option( WooCommerce_Delivery_Notes::$plugin_prefix . 'invoice_number_start', 1 ) ) ); ?>" />
 							</p>
 							<span class="description">
 								<?php _e( 'Start the numbering at the specified number.', 'woocommerce-delivery-notes' ); ?>
 								<strong><?php _e( 'Note:', 'woocommerce-delivery-notes' ); ?></strong>
 								<?php _e( 'Use only integers.', 'woocommerce-delivery-notes' ); ?>
-								<?php _e( 'Already created invoice numbers are not affected by changes.', 'woocommerce-delivery-notes' ); ?>
 							</span>
 						</td>
 					</tr>
@@ -327,7 +383,6 @@ if ( !class_exists( 'WooCommerce_Delivery_Notes_Settings' ) ) {
 								<?php _e( 'This text will be prepended to the invoice number.', 'woocommerce-delivery-notes' ); ?>
 								<strong><?php _e( 'Note:', 'woocommerce-delivery-notes' ); ?></strong>
 								<?php _e( 'Leave blank to not add a prefix.', 'woocommerce-delivery-notes' ); ?>
-								<?php _e( 'Already created invoice numbers are not affected by changes.', 'woocommerce-delivery-notes' ); ?>
 							</span>
 						</td>
 					</tr>
@@ -343,8 +398,22 @@ if ( !class_exists( 'WooCommerce_Delivery_Notes_Settings' ) ) {
 								<?php _e( 'This text will be appended to the invoice number.', 'woocommerce-delivery-notes' ); ?>
 								<strong><?php _e( 'Note:', 'woocommerce-delivery-notes' ); ?></strong>
 								<?php _e( 'Leave blank to not add a suffix.', 'woocommerce-delivery-notes' ); ?>
-								<?php _e( 'Already created invoice numbers are not affected by changes.', 'woocommerce-delivery-notes' ); ?>
 							</span>
+						</td>
+					</tr>
+					<tr class="invoice-number-row" <?php if( empty( $create_invoice_number ) ) : ?> style="display: none;"<?php endif; ?>>
+						<th>
+							<label><?php _e( 'Invoice Number Counter', 'woocommerce-delivery-notes' ); ?></label>
+						</th>
+						<td>
+							<p>
+								<?php
+									$invoice_start = intval( get_option( WooCommerce_Delivery_Notes::$plugin_prefix . 'invoice_number_start', 1 ) );
+									$invoice_counter = intval( get_option( WooCommerce_Delivery_Notes::$plugin_prefix . 'invoice_number_counter', 0 ) );
+								?>
+								<span id="invoice-counter-value"><?php echo $invoice_counter; ?></span>
+								<a href="#" id="reset-invoice-counter" class="button"><?php _e( 'Reset Counter', 'woocommerce-delivery-notes' ); ?></a>
+							</p>
 						</td>
 					</tr>
 					<tr>
@@ -352,11 +421,13 @@ if ( !class_exists( 'WooCommerce_Delivery_Notes_Settings' ) ) {
 							<label><?php _e( 'Sequential Order Number', 'woocommerce-delivery-notes' ); ?></label>
 						</th>
 						<td>
+							<p>
 							<?php if( $this->is_woocommerce_sequential_order_numbers_activated() ) : ?>
 								<?php _e( 'Sequential numbering is enabled.', 'woocommerce-delivery-notes' ); ?>
 							<?php else : ?>
 								<?php printf( __( 'Install and activate the free <a href="%s">WooCommerce Sequential Order Numbers</a> Plugin.', 'woocommerce-delivery-notes' ), 'http://wordpress.org/extend/plugins/woocommerce-sequential-order-numbers/' ); ?>
 							<?php endif; ?>
+							</p>
 						</td>
 					</tr>
 				</tbody>
@@ -372,6 +443,13 @@ if ( !class_exists( 'WooCommerce_Delivery_Notes_Settings' ) ) {
 		public function save_settings_page() {
 			if ( isset( $_POST[ $this->hidden_submit ] ) && $_POST[ $this->hidden_submit ] == 'submitted' ) {
 				
+				if( empty( $_POST[WooCommerce_Delivery_Notes::$plugin_prefix . 'template_type_invoice'] ) &&
+					empty( $_POST[WooCommerce_Delivery_Notes::$plugin_prefix . 'template_type_delivery_note'] ) &&
+					empty( $_POST[WooCommerce_Delivery_Notes::$plugin_prefix . 'template_type_receipt'] ) ) {
+					$_POST[WooCommerce_Delivery_Notes::$plugin_prefix . 'template_type_invoice'] = 1;
+					$_POST[WooCommerce_Delivery_Notes::$plugin_prefix . 'template_type_delivery_note'] = 1;
+				}
+				
 				// Save settings
 				foreach ( $_POST as $key => $value ) {
 					if ( $key != $this->hidden_submit && strpos( $key, WooCommerce_Delivery_Notes::$plugin_prefix ) !== false ) {
@@ -382,7 +460,7 @@ if ( !class_exists( 'WooCommerce_Delivery_Notes_Settings' ) ) {
 							}
 							
 							if ( $key == WooCommerce_Delivery_Notes::$plugin_prefix . 'invoice_number_start' ) {
-								$value = 1;
+								$value = 0;
 							}
 						}
 						
@@ -393,14 +471,8 @@ if ( !class_exists( 'WooCommerce_Delivery_Notes_Settings' ) ) {
 						
 						if ( $key == WooCommerce_Delivery_Notes::$plugin_prefix . 'invoice_number_start' ) {
 							if ( !ctype_digit( $value ) ) {
-								$value = 1;
+								$value = 0;
 							}
-							
-							// Check if the counter should be reset
-							if( get_option( $key ) != $value ) {
-								update_option( WooCommerce_Delivery_Notes::$plugin_prefix . 'invoice_number_counter', 0 );
-							}
-							
 						}
 						
 						// Update the value

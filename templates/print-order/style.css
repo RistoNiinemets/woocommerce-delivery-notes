@@ -82,7 +82,7 @@ tr {
 
 td,
 th {
-	padding: 0.375em 0;
+	padding: 0.375em 0.65em 0.375em 0;
 	vertical-align: top;
 }
 
@@ -98,6 +98,10 @@ th {
 	padding-bottom: 1.25em;
 }
 
+tfoot {
+	display: table-row-group;
+}
+
 /* Page Margins & Basic Stylings */
 #page {
 	margin-left: auto;
@@ -111,7 +115,10 @@ th {
 	padding-right: 10%;
 	padding-top: 5%;
 	padding-bottom: 5%;
-	page-break-after: always;
+}
+
+.content + .content {
+	page-break-before: always;
 }
 
 h1,
@@ -163,9 +170,6 @@ h2 {
 }
 
 /* Switch the addresses for invoices */
-.invoice .billing-address {
-	float: right;
-}
 
 /* Order Info */
 .order-info ul {
@@ -183,6 +187,7 @@ h2 {
 	text-overflow: ellipsis;
 	overflow: hidden;
 	margin-bottom: 0;
+	padding-right: 0.35em;
 }
 
 /* Order Items */
@@ -199,10 +204,16 @@ h2 {
 .order-items .head-quantity,
 .order-items .product-quantity,
 .order-items .total-quantity,
+.order-items .head-item-price,
+.order-items .product-item-price,
+.order-items .total-item-price {
+	width: 15%;
+}
+
 .order-items .head-price,
 .order-items .product-price,
 .order-items .total-price {
-	width: 25%;
+	width: 20%;
 }
 
 .order-items tbody .name {
@@ -241,11 +252,13 @@ h2 {
 .order-items tfoot tr:last-child .total-price {
 	font-size: 0.785em;
 	font-weight: normal;
+	line-height: 200%;
 }
 
 .order-items tfoot tr:last-child .total-price .amount:first-child {
 	font-size: 1.273em;
 	font-weight: bold;
+	line-height: 1.273em;
 }
 
 .order-items tfoot tr:last-child {
@@ -287,5 +300,10 @@ h2 {
 @media print {
 	body {
 		font-size: 8pt;
+	}
+	
+	.content {
+		/* Remove padding to not generate empty follow up pages */
+		padding-bottom: 0;
 	}
 }
